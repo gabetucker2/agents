@@ -10,6 +10,9 @@ public class ExecuteAlgorithm : MonoBehaviour {
     private Master master;
     private float iterationTime;
     private int iterationMax;
+    private float aStar_weight;
+    private bool aStar_dijkstras;
+    private float timeStart = 0;
     
     private AStar aStar = null;
     
@@ -23,8 +26,12 @@ public class ExecuteAlgorithm : MonoBehaviour {
 
             switch (scriptName) {
                 case "AStar":
-                    if (master.iteration == 0) { aStar.Main(master); }
-                    if(!aStar.Iterate()) {
+                    if (master.iteration == 0) { aStar.Main(master, aStar_weight, aStar_dijkstras); }
+                    float aStarIterate = aStar.Iterate();
+                    if(aStarIterate != -1f) {
+                        // detected agent arrived at goal, stop the loop
+                        master.lastRunRT = Time.realtimeSinceStartup - timeStart;
+                        master.lastRunPathLen = aStarIterate;
                         CancelIterations();
                     }
                     break;
@@ -41,15 +48,18 @@ public class ExecuteAlgorithm : MonoBehaviour {
 
     }
 
-    public void Main(string _scriptName, Master _master, float _iterationTime, int _iterationMax) {
+    public void Main(string _scriptName, Master _master, float _iterationTime, int _iterationMax, float _aStar_weight, bool _aStar_dijkstras) {
 
         // update global variables so RunIteration() can reference them without needing a coroutine to pass arguments (since InvokeRepeating passes no arguments)
-        ( scriptName,  master,  iterationTime,  iterationMax) =
-        (_scriptName, _master, _iterationTime, _iterationMax);
+        ( scriptName,  master,  iterationTime,  iterationMax,  aStar_weight,  aStar_dijkstras) =
+        (_scriptName, _master, _iterationTime, _iterationMax, _aStar_weight, _aStar_dijkstras);
 
         aStar = master.GetComponent<AStar>();
+
+        timeStart = Time.realtimeSinceStartup;
         
         if (iterationTime == 0) {
+            // use while loop instead if iterationTime == 0 since InvokeRepeating can't handle when t == 0
             while (!master.finished) {
                 RunIteration();
             }
@@ -60,8 +70,10 @@ public class ExecuteAlgorithm : MonoBehaviour {
     }
 
     public void CancelIterations() {
-        master.finished = true;
-        CancelInvoke();
+        if (master != null) {
+            master.finished = true;
+            CancelInvoke();
+        }
     }
 
 }

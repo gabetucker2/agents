@@ -7,38 +7,28 @@ using UnityEditor;
 public class Data_AStar {
 
     // FUNCTIONS
-    private float Operation(float _g, float _h) {
-        return g + h;
+    private float Operation(float _g, float _h, float _w, bool _dijkstras) {
+        float dij = _dijkstras ? 0 : 1;
+        return g + w*dij*h;
     }
 
     // DON'T SET
     public float f;
     public float g;
     public float h;
+    public float w;
+    public bool dijkstras;
+
+    public void UpdateF() { f = Operation(g, h, w, dijkstras); }
     
     // SET
-    public float G {
-        get { return g; }
-        set {
-            g = value;
-            f = Operation(g, h);
-        }
-    }
-
-    public float H {
-        get { return h; }
-        set {
-            h = value;
-            f = Operation(g, h);
-        }
-    }
     public int predecessorID; // int rather than Tile to avoid infinite recursion
 
     // CONSTRUCTOR
-    public Data_AStar(float _g = -0.5f, float _h = -0.5f, int _predecessorID = -1) {
+    public Data_AStar(float _g = -0.5f, float _h = -0.5f, float _w = 1f, bool _dijkstras = false, int _predecessorID = -1) {
 
-        ( G,  H,  predecessorID) =
-        (_g, _h, _predecessorID);
+        ( g,  h,  w,  dijkstras,  predecessorID) =
+        (_g, _h, _w, _dijkstras, _predecessorID);
 
     }
 
@@ -89,6 +79,8 @@ public class Master : MonoBehaviour {
     
     [Space(10)]
     [Header(" - DON'T SET")]
+    public float lastRunRT = 0f;
+    public float lastRunPathLen = 0f;
     public int iteration = 0;
     public bool update = true;
     public bool finished = false;

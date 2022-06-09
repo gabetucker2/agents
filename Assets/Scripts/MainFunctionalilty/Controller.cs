@@ -12,7 +12,7 @@ public class Controller : EditorWindow {
     private float iterationTime = 1f;
     private int iterationMax = 100;
     private bool cancelIterations = false;
-    private bool verified = false;
+    private bool verified, playing, ready = false;
 
     private float minIterationTime = 0f;
     
@@ -31,6 +31,9 @@ public class Controller : EditorWindow {
 
     // Algorithms Section:
     private bool runAStar = false;
+    private bool aStar_dijkstras = false;
+    private float aStar_weight = 1f;
+    private float aStar_minWeight = 1f;
 
     // INITIALIZE
     [MenuItem("Window/Controller")]
@@ -58,6 +61,7 @@ public class Controller : EditorWindow {
             iterationTime = EditorGUILayout.FloatField("Iteration Time", iterationTime); // time between each iteration
             iterationMax = EditorGUILayout.IntField("Iteration Max", iterationMax); // maximum number of iterations
             cancelIterations = GUILayout.Button("Cancel Procedures");
+            
             if (cancelIterations) { executeAlgorithm.CancelIterations(); }
             if (iterationTime < minIterationTime) { iterationTime = minIterationTime; }
 
@@ -90,27 +94,43 @@ public class Controller : EditorWindow {
             master.goalTile = master.GetTileFromCoords(goalPos);
             master.mapScale = mapScale;
 
-            bool needsToUpdate = 
-                (mapScale != _mapScale || offset != _offset || stretch != _stretch || clamp != _clamp ||
-                startPos != _startPos || goalPos != _goalPos);
-
-            if (runGenerateWorld || (master.update && needsToUpdate)) { // button click to cancel OR value update when allowed
+            if (Event.current.type == EventType.Layout) { // have to do if-else else to avoid pesky error in console... has to do with GUI updates between layout and repaint
                 
-                if (master.update && needsToUpdate) {
-                    (_mapScale, _offset, _stretch, _clamp) =
-                    ( mapScale,  offset,  stretch,  clamp);
-                } else {
+                bool needsToUpdate = 
+                    (mapScale != _mapScale || offset != _offset || stretch != _stretch || clamp != _clamp ||
+                    startPos != _startPos || goalPos != _goalPos);
+
+                if (runGenerateWorld || (master.update && needsToUpdate)) { // button click to cancel OR value update when allowed
+                    
+                    if (master.update && needsToUpdate) {
+                        (_mapScale, _offset, _stretch, _clamp) =
+                        ( mapScale,  offset,  stretch,  clamp);
+                    } else {
+                        master.update = true;
+                        executeAlgorithm.CancelIterations();
+                    }
+                    
+                    verified = generateWorld.Main(master, mapScale, offset, stretch, clamp);
+
+                }
+
+                ready = master.iteration == 0;
+                playing = Application.isPlaying;
+
+            } else {
+
+                 if (runGenerateWorld) { // button click to cancel OR value update when allowed
+                    
                     master.update = true;
                     executeAlgorithm.CancelIterations();
+                    
+                    verified = generateWorld.Main(master, mapScale, offset, stretch, clamp);
+
                 }
-                
-                verified = generateWorld.Main(master, mapScale, offset, stretch, clamp);
 
             }
 
-            bool ready = master.iteration == 0;
-            bool playing = Application.isPlaying;
-
+            
             EditorGUILayout.LabelField(verified ? "Verified" : "/ Unverified");
             EditorGUILayout.LabelField(playing ? "Play Mode" : "/ Editor Mode");
             EditorGUILayout.LabelField(ready ? "Ready" : (!master.finished ? "/ Active" : "/ Finished"));
@@ -122,6 +142,10 @@ public class Controller : EditorWindow {
                 EditorGUILayout.LabelField(" - ALGORITHMS");
                 
                 runAStar = GUILayout.Button("Run AStar"); // run AStar trigger
+                aStar_dijkstras = EditorGUILayout.Toggle("Dijkstras", aStar_dijkstras);
+                aStar_weight = EditorGUILayout.FloatField("Weight", aStar_weight); // stretch input text
+
+                if (aStar_weight< aStar_minWeight) { aStar_weight = aStar_minWeight; }
 
                 // add or conditions to represent other algorithms
                 if (runAStar) {
@@ -130,7 +154,7 @@ public class Controller : EditorWindow {
                 }
 
                 if (runAStar) {
-                    executeAlgorithm.Main("AStar", master, iterationTime, iterationMax);
+                    executeAlgorithm.Main("AStar", master, iterationTime, iterationMax, aStar_weight, aStar_dijkstras);
                 }
                 
             }

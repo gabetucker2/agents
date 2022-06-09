@@ -6,8 +6,16 @@ public class AStar : MonoBehaviour {
 
     // state 0 => untouched, state 1 => open, state 2 => closed with expand color, 3 => closed with closed color
 
+    // n := next node on path (lowest fCost)
+    // gCost := path distance from n to start
+    // hCost := straight-line distance from n to  goal
+    // f := fCost := gCost + w*hCost
+    // w := weight in favor of hCost
+
     private Master master;
     private float sqrt2;
+    private float weight;
+    private bool dijkstras;
     private List<Vector2Int> searchMatrix = new List<Vector2Int>() {
         new Vector2Int(-1, -1),
         new Vector2Int(-1,  0),
@@ -18,15 +26,13 @@ public class AStar : MonoBehaviour {
         new Vector2Int( 1,  0),
         new Vector2Int( 1,  1),
     };
+    // 3 sets:
+    // open (implicit for all nodes not in closed, don't need a List), open neighbors (called open for shorthand), closed
     private List<Tile> open;
     private List<Tile> closed;
 
-    private float GetG(Tile tile) {
-        return GetPathLen(tile);
-    }
-    
-    private float GetH(Tile tile) { // calculate number of moves, indiscriminate from environment, to get to end
-        Vector2Int magnitude = new Vector2Int(Mathf.Abs(tile.Coordinates.x - master.goalTile.Coordinates.x), Mathf.Abs(tile.Coordinates.y - master.goalTile.Coordinates.y));
+    private float StraightLineDistance(Tile tileOne, Tile tileTwo) {
+        Vector2Int magnitude = new Vector2Int(Mathf.Abs(tileOne.Coordinates.x - tileTwo.Coordinates.x), Mathf.Abs(tileOne.Coordinates.y - tileTwo.Coordinates.y));
         int diagonals = Mathf.Max(magnitude.x, magnitude.y);
         int parallels = magnitude.x < magnitude.y ? magnitude.y - diagonals : magnitude.x - diagonals;
         return (float)diagonals*sqrt2 + (float)parallels;
@@ -34,12 +40,17 @@ public class AStar : MonoBehaviour {
 
     private void UpdateCosts(Tile tile) {
         Data_AStar data_AStar = tile.data_AStar;
-        data_AStar.G = GetG(tile);
-        data_AStar.H = GetH(tile);
+        data_AStar.g = dijkstras ? StraightLineDistance(tile, master.startTile) : GetPathLen(tile);
+        print("G="+data_AStar.g);
+        data_AStar.h = StraightLineDistance(tile, master.goalTile);
+        data_AStar.UpdateF();
+        print("F="+data_AStar.f);
     }
 
     private void AddToOpen(Tile tile) {
         tile.state++;
+        tile.data_AStar.w = weight;
+        tile.data_AStar.dijkstras = dijkstras;
         open.Add(tile);
         if (tile.tileType == "Empty") {
             master.UpdateTileColor(tile, master.openCol);
@@ -57,15 +68,28 @@ public class AStar : MonoBehaviour {
         }
     }
 
-    private void FinalizePath(Tile tile) {
+    private float FinalizePath(Tile tile, float len = 0f) {
         
         Tile predecessor = master.GetPredecessorFromID(tile.data_AStar.predecessorID);
 
         if (predecessor != null) {
+            
+            if (tile.Coordinates.x != predecessor.Coordinates.x && tile.Coordinates.y != predecessor.Coordinates.y) { // diagonal
+                len += sqrt2;
+            } else {
+                len++;
+            }
+
             if (tile.tileType != "Goal") {
                 master.UpdateTileColor(tile, master.agentCol);
             }
-            FinalizePath(predecessor);
+
+            // propagate the loop
+            return FinalizePath(predecessor, len);
+
+        } else {
+            // break the loop
+            return len;
         }
 
     }
@@ -92,9 +116,12 @@ public class AStar : MonoBehaviour {
 
     }
 
-    public void Main(Master _master) {
+    public void Main(Master _master, float _weight, bool _dijkstras) {
 
-        master = _master;
+        ( master,  weight,  dijkstras) =
+        (_master, _weight, _dijkstras);
+        
+        sqrt2 = Mathf.Sqrt(2);
         
         open = new List<Tile>();
         closed = new List<Tile>();
@@ -106,21 +133,18 @@ public class AStar : MonoBehaviour {
         AddToOpen(startTile);
         UpdateCosts(startTile);
 
-        sqrt2 = Mathf.Sqrt(2);
-
     }
 
-    public bool Iterate() {
+    public float Iterate() {
 
-        bool ExploreNeighbors(Tile current) {
+        float ExploreNeighbors(Tile current) {
 
             OpenToClosed(current);
 
             if (current.tileType == "Goal") {
 
-                // arrived at goal!
-                FinalizePath(current);
-                return false;
+                // arrived at goal; return length from start to end
+                return FinalizePath(current);
 
             }
 
@@ -132,7 +156,7 @@ public class AStar : MonoBehaviour {
                 if (neighbor != null && neighbor.state < 2 && neighbor.tileType != "Full") {
 
                     // if new path to neighbor is shorter than the neighbor's previous path or neighbor isn't added to open
-                    if (GetPathLen(neighbor, current) < GetPathLen(neighbor) || neighbor.state != 1) {
+                    if (dijkstras || (GetPathLen(neighbor, current) < GetPathLen(neighbor) || neighbor.state != 1)) {
                         
                         // update paths/costs of surrounding
                         neighbor.data_AStar.predecessorID = master.GetIDFromTile(current);
@@ -147,11 +171,11 @@ public class AStar : MonoBehaviour {
 
             }
 
-            return true;
+            return -1f;
 
         }
 
-        Tile GetMinFCost() {
+        Tile GetN() {
 
             Tile minFTile = null;
             float minF = float.MaxValue;
@@ -196,7 +220,7 @@ public class AStar : MonoBehaviour {
 
         }
         
-        return ExploreNeighbors(GetMinFCost());
+        return ExploreNeighbors(GetN());
 
     }
     
